@@ -1,0 +1,269 @@
+import { useState, useMemo } from 'react'
+import { Check, AlertCircle, ChevronRight, ChevronLeft, MessageCircle, Phone, Mail } from 'lucide-react'
+import { useData } from '../context/DataContext.jsx'
+import { formatCurrency, monthShort, monthLabel, monthsFromStart, currentMonth } from '../utils/format.js'
+
+export default function Payments() {
+  const { building, tenants, payments, setPayment } = useData()
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth())
+  const [view, setView] = useState('grid') // 'grid' | 'month'
+
+  const months = useMemo(() => monthsFromStart(building.startMonth), [building.startMonth])
+  const sortedTenants = useMemo(
+    () => [...tenants].filter(t => t.active).sort((a, b) => a.apartmentNumber - b.apartmentNumber),
+    [tenants]
+  )
+
+  const getPayment = (tenantId, month) => {
+    return payments.find(p => p.tenantId === tenantId && p.month === month)
+  }
+
+  const togglePayment = (tenantId, month) => {
+    const existing = getPayment(tenantId, month)
+    setPayment(tenantId, month, !existing?.paid)
+  }
+
+  // Stats for selected month
+  const monthStats = useMemo(() => {
+    const paidCount = sortedTenants.filter(t => getPayment(t.id, selectedMonth)?.paid).length
+    const expected = sortedTenants.length * building.monthlyFee
+    const collected = paidCount * building.monthlyFee
+    return {
+      paidCount,
+      unpaidCount: sortedTenants.length - paidCount,
+      expected,
+      collected,
+      percent: expected ? Math.round((collected / expected) * 100) : 0
+    }
+  }, [sortedTenants, selectedMonth, payments, building.monthlyFee])
+
+  const debtors = sortedTenants.filter(t => !getPayment(t.id, selectedMonth)?.paid)
+
+  const reminderText = (tenantName) => {
+    return `שלום ${tenantName},\nתזכורת ידידותית - דמי הוועד עבור ${monthLabel(selectedMonth)} בסך ${formatCurrency(building.monthlyFee)} עדיין לא שולמו.\nאנא דאגו להעביר בהקדם.\nתודה,\nועד בית ${building.name}`
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 mb-1">תשלומי ועד</h1>
+          <p className="text-slate-500">{formatCurrency(building.monthlyFee)} לדירה לחודש</p>
+        </div>
+        <div className="flex bg-white rounded-xl p-1 border border-slate-200">
+          <button
+            onClick={() => setView('grid')}
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
+          >
+            טבלה כללית
+          </button>
+          <button
+            onClick={() => setView('month')}
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${view === 'month' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
+          >
+            חודש בודד
+          </button>
+        </div>
+      </div>
+
+      {view === 'month' ? (
+        <>
+          {/* Month selector */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+            <button
+              onClick={() => {
+                const idx = months.indexOf(selectedMonth)
+                if (idx > 0) setSelectedMonth(months[idx - 1])
+              }}
+              disabled={months.indexOf(selectedMonth) === 0}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
+            >
+              <ChevronRight size={20} />
+            </button>
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="font-bold text-xl text-slate-900 bg-transparent border-none focus:outline-none cursor-pointer"
+            >
+              {months.map(m => (
+                <option key={m} value={m}>{monthLabel(m)}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                const idx = months.indexOf(selectedMonth)
+                if (idx < months.length - 1) setSelectedMonth(months[idx + 1])
+              }}
+              disabled={months.indexOf(selectedMonth) === months.length - 1}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
+            >
+              <ChevronLeft size={20} />
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+              <div className="text-sm text-slate-500">שילמו</div>
+              <div className="text-2xl font-bold text-emerald-600">{monthStats.paidCount}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+              <div className="text-sm text-slate-500">חייבים</div>
+              <div className="text-2xl font-bold text-red-600">{monthStats.unpaidCount}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+              <div className="text-sm text-slate-500">נגבה</div>
+              <div className="text-2xl font-bold text-slate-900">{formatCurrency(monthStats.collected)}</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+              <div className="text-sm text-slate-500">צפי</div>
+              <div className="text-2xl font-bold text-slate-900">{formatCurrency(monthStats.expected)}</div>
+            </div>
+          </div>
+
+          {/* Tenants list */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {sortedTenants.map(tenant => {
+                const payment = getPayment(tenant.id, selectedMonth)
+                const isPaid = !!payment?.paid
+                return (
+                  <div
+                    key={tenant.id}
+                    className={`p-4 flex items-center gap-4 ${!isPaid ? 'bg-red-50' : ''}`}
+                  >
+                    <button
+                      onClick={() => togglePayment(tenant.id, selectedMonth)}
+                      className={`
+                        w-12 h-12 rounded-xl flex items-center justify-center font-bold transition-all flex-shrink-0
+                        ${isPaid
+                          ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                          : 'bg-red-100 text-red-600 hover:bg-red-200 border-2 border-red-300'
+                        }
+                      `}
+                    >
+                      {isPaid ? <Check size={24} /> : <AlertCircle size={20} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900">דירה {tenant.apartmentNumber} - {tenant.name}</div>
+                      <div className={`text-sm ${isPaid ? 'text-emerald-600' : 'text-red-600 font-semibold'}`}>
+                        {isPaid
+                          ? `שולם ${payment.paidDate ? '· ' + new Date(payment.paidDate).toLocaleDateString('he-IL') : ''}`
+                          : 'לא שולם'
+                        }
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!isPaid && tenant.phone && (
+                        <a
+                          href={`https://wa.me/972${tenant.phone.replace(/\D/g, '').replace(/^0/, '')}?text=${encodeURIComponent(reminderText(tenant.name))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                          title="שלח תזכורת בוואטסאפ"
+                        >
+                          <MessageCircle size={18} />
+                        </a>
+                      )}
+                      <div className="text-left">
+                        <div className="font-bold text-slate-900">{formatCurrency(building.monthlyFee)}</div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Debtors quick reminder */}
+          {debtors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+              <h3 className="font-bold text-red-700 mb-2">
+                שלח תזכורת ל-{debtors.length} חייבים
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {debtors.filter(t => t.phone).map(t => (
+                  <a
+                    key={t.id}
+                    href={`https://wa.me/972${t.phone.replace(/\D/g, '').replace(/^0/, '')}?text=${encodeURIComponent(reminderText(t.name))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-white px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm hover:bg-red-100 transition-colors flex items-center gap-1"
+                  >
+                    <MessageCircle size={14} />
+                    דירה {t.apartmentNumber}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th className="text-right p-3 font-semibold text-slate-700 sticky right-0 bg-slate-50 z-10 min-w-[140px]">
+                    דייר
+                  </th>
+                  {months.map(m => (
+                    <th key={m} className="text-center p-2 font-semibold text-slate-700 text-xs whitespace-nowrap">
+                      {monthShort(m)}
+                    </th>
+                  ))}
+                  <th className="text-center p-3 font-semibold text-slate-700 bg-slate-50">סה"כ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedTenants.map(tenant => {
+                  const tenantPayments = months.map(m => ({
+                    month: m,
+                    payment: getPayment(tenant.id, m)
+                  }))
+                  const paidCount = tenantPayments.filter(p => p.payment?.paid).length
+                  const unpaidCount = tenantPayments.length - paidCount
+                  const debt = unpaidCount * building.monthlyFee
+                  return (
+                    <tr key={tenant.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="p-3 sticky right-0 bg-white z-10 border-l border-slate-100">
+                        <div className="font-semibold text-slate-900 text-sm">דירה {tenant.apartmentNumber}</div>
+                        <div className="text-xs text-slate-500 truncate max-w-[120px]">{tenant.name}</div>
+                      </td>
+                      {tenantPayments.map(({ month, payment }) => {
+                        const isPaid = !!payment?.paid
+                        return (
+                          <td key={month} className="p-1 text-center">
+                            <button
+                              onClick={() => togglePayment(tenant.id, month)}
+                              className={`
+                                w-9 h-9 rounded-lg font-bold transition-all
+                                ${isPaid
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  : 'bg-red-100 text-red-600 hover:bg-red-200 border-2 border-red-300'
+                                }
+                              `}
+                              title={isPaid ? `שולם - ${monthLabel(month)}` : `לא שולם - ${monthLabel(month)}`}
+                            >
+                              {isPaid ? <Check size={16} className="mx-auto" /> : '✕'}
+                            </button>
+                          </td>
+                        )
+                      })}
+                      <td className="p-3 text-center bg-slate-50 border-r border-slate-100">
+                        <div className={`text-sm font-bold ${debt > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {debt > 0 ? formatCurrency(debt) : '✓'}
+                        </div>
+                        <div className="text-xs text-slate-500">{paidCount}/{months.length}</div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
