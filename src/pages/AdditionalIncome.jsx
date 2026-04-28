@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
 import { formatCurrency, monthLabel, monthShort, monthsFromStart, currentMonth, formatDate } from '../utils/format.js'
+import AttachmentManager from '../components/AttachmentManager.jsx'
 
 const STREAM_TYPES = [
   { id: 'parking', label: 'חניה', icon: Car, color: 'blue' },
@@ -40,7 +41,8 @@ export default function AdditionalIncome() {
     renterName: '',
     renterPhone: '',
     notes: '',
-    active: true
+    active: true,
+    attachments: []
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -72,7 +74,8 @@ export default function AdditionalIncome() {
       renterName: stream.renterName || '',
       renterPhone: stream.renterPhone || '',
       notes: stream.notes || '',
-      active: stream.active !== false
+      active: stream.active !== false,
+      attachments: stream.attachments || []
     })
     setEditingId(stream.id)
     setShowForm(true)
@@ -341,6 +344,11 @@ export default function AdditionalIncome() {
                       <span>נגבה: <strong className="text-emerald-600">{formatCurrency(totalReceived)}</strong></span>
                       <span>{paidCount} חודשים</span>
                     </div>
+                    {stream.attachments?.length > 0 && (
+                      <div className="text-xs text-blue-600 font-semibold bg-blue-50 rounded px-2 py-1 inline-block mt-2 mr-2">
+                        📎 {stream.attachments.length} מסמכים
+                      </div>
+                    )}
                     {!stream.active && (
                       <div className="text-xs text-amber-600 font-semibold bg-amber-50 rounded px-2 py-1 inline-block mt-2">
                         לא פעיל
@@ -458,6 +466,14 @@ export default function AdditionalIncome() {
                 />
                 פעיל (חישוב בצפי החודשי)
               </label>
+
+              <div className="border-t border-slate-200 pt-4">
+                <AttachmentManager
+                  attachments={form.attachments}
+                  onChange={(atts) => setForm({ ...form, attachments: atts })}
+                  label="חוזים ומסמכים"
+                />
+              </div>
 
               <div className="flex gap-2 pt-2">
                 <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold">
