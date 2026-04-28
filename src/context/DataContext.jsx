@@ -324,6 +324,7 @@ export const DataProvider = ({ children }) => {
         paid,
         amount,
         paidDate: paid ? (options.paidDate || new Date().toISOString().slice(0, 10)) : null,
+        method: options.method || existing.method || 'cash',
         note: options.note ?? existing.note ?? ''
       })
     } else {
@@ -333,6 +334,7 @@ export const DataProvider = ({ children }) => {
         paid,
         amount,
         paidDate: paid ? (options.paidDate || new Date().toISOString().slice(0, 10)) : null,
+        method: options.method || 'cash',
         note: options.note || '',
         createdAt: serverTimestamp()
       })

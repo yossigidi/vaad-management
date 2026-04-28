@@ -1,20 +1,13 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Check, AlertCircle, ChevronRight, ChevronLeft, MessageCircle, Phone, Mail, X, Banknote, FileText, Building2, Smartphone } from 'lucide-react'
+import { Check, AlertCircle, ChevronRight, ChevronLeft, MessageCircle, Phone, Mail, X } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
 import {
   formatCurrency, monthShort, monthLabel, monthsFromStart, currentMonth,
   generatePeriods, periodLabel, periodShort, currentPeriodFor,
   FREQUENCY_LABELS, FREQUENCY_PERIODS_PER_YEAR
 } from '../utils/format.js'
-
-export const PAYMENT_METHODS = [
-  { id: 'cash', label: 'מזומן', icon: Banknote, emoji: '💵', color: 'emerald' },
-  { id: 'check', label: 'צ׳ק', icon: FileText, emoji: '📝', color: 'blue' },
-  { id: 'transfer', label: 'העברה בנקאית', icon: Building2, emoji: '🏦', color: 'purple' },
-  { id: 'bit', label: 'ביט', icon: Smartphone, emoji: '📱', color: 'amber' }
-]
-
-export const getMethodInfo = (id) => PAYMENT_METHODS.find(m => m.id === id) || PAYMENT_METHODS[0]
+import { PAYMENT_METHODS, getMethodInfo } from '../utils/paymentMethods.js'
+import PaymentMethodDialog from '../components/PaymentMethodDialog.jsx'
 
 export default function Payments() {
   const { building, tenants, payments, setPayment } = useData()
@@ -358,9 +351,7 @@ export default function Payments() {
 
       {methodDialog && (
         <PaymentMethodDialog
-          tenant={sortedTenants.find(t => t.id === methodDialog.tenantId)}
-          period={methodDialog.period}
-          frequency={frequency}
+          subtitle={`דירה ${sortedTenants.find(t => t.id === methodDialog.tenantId)?.apartmentNumber} - ${sortedTenants.find(t => t.id === methodDialog.tenantId)?.name} · ${periodLabel(methodDialog.period, frequency)}`}
           amount={amountPerPeriod}
           onConfirm={(method, paidDate, note) => {
             setPayment(methodDialog.tenantId, methodDialog.period, true, { method, paidDate, note })
@@ -369,100 +360,6 @@ export default function Payments() {
           onClose={() => setMethodDialog(null)}
         />
       )}
-    </div>
-  )
-}
-
-function PaymentMethodDialog({ tenant, period, frequency, amount, onConfirm, onClose }) {
-  const [method, setMethod] = useState('cash')
-  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10))
-  const [note, setNote] = useState('')
-  const [showNote, setShowNote] = useState(false)
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xl font-bold text-slate-900">איך שילם?</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700"><X size={20} /></button>
-        </div>
-        <p className="text-sm text-slate-500 mb-4">
-          דירה {tenant?.apartmentNumber} - {tenant?.name} · {periodLabel(period, frequency)} · <strong>{formatCurrency(amount)}</strong>
-        </p>
-
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {PAYMENT_METHODS.map(m => {
-            const Icon = m.icon
-            const isActive = method === m.id
-            const colorMap = {
-              emerald: 'border-emerald-500 bg-emerald-50 text-emerald-700',
-              blue: 'border-blue-500 bg-blue-50 text-blue-700',
-              purple: 'border-purple-500 bg-purple-50 text-purple-700',
-              amber: 'border-amber-500 bg-amber-50 text-amber-700'
-            }
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setMethod(m.id)}
-                className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 ${isActive ? colorMap[m.color] : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-              >
-                <div className="text-2xl">{m.emoji}</div>
-                <div className="font-semibold text-sm">{m.label}</div>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium text-slate-700 mb-1">תאריך התשלום</label>
-          <input
-            type="date"
-            value={paidDate}
-            onChange={e => setPaidDate(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2"
-          />
-        </div>
-
-        {showNote ? (
-          <div className="mb-3">
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              הערה (למשל: מספר צ׳ק)
-            </label>
-            <input
-              type="text"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2"
-              placeholder={method === 'check' ? 'מספר צ׳ק...' : ''}
-              autoFocus
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowNote(true)}
-            className="text-sm text-blue-600 hover:underline mb-3"
-          >
-            + הוסף הערה
-          </button>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => onConfirm(method, paidDate, note)}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-semibold"
-          >
-            ✓ סמן כשולם
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-semibold"
-          >
-            ביטול
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

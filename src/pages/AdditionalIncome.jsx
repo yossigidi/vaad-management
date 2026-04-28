@@ -10,6 +10,8 @@ import {
   FREQUENCY_LABELS, FREQUENCY_PERIODS_PER_YEAR
 } from '../utils/format.js'
 import AttachmentManager from '../components/AttachmentManager.jsx'
+import PaymentMethodDialog from '../components/PaymentMethodDialog.jsx'
+import { getMethodInfo } from '../utils/paymentMethods.js'
 
 const STREAM_TYPES = [
   { id: 'parking', label: 'חניה', icon: Car, color: 'blue' },
@@ -39,6 +41,7 @@ export default function AdditionalIncome() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth())
   const [freqTab, setFreqTab] = useState('monthly') // 'monthly' | 'bi-monthly' | 'yearly'
   const [selectedPeriod, setSelectedPeriod] = useState('')
+  const [methodDialog, setMethodDialog] = useState(null) // {streamId, period} or null
 
   const emptyForm = {
     type: 'parking',
@@ -300,7 +303,13 @@ export default function AdditionalIncome() {
                   return (
                     <div key={stream.id} className={`p-4 flex items-center gap-4 ${!isPaid ? 'bg-red-50' : ''}`}>
                       <button
-                        onClick={() => setIncomeReceipt(stream.id, selectedPeriod, !isPaid)}
+                        onClick={() => {
+                          if (isPaid) {
+                            if (confirm('לסמן כלא שולם?')) setIncomeReceipt(stream.id, selectedPeriod, false)
+                          } else {
+                            setMethodDialog({ streamId: stream.id, period: selectedPeriod })
+                          }
+                        }}
                         className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold flex-shrink-0
                           ${isPaid ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-red-100 text-red-600 hover:bg-red-200 border-2 border-red-300'}`}
                       >
@@ -318,7 +327,11 @@ export default function AdditionalIncome() {
                       <div className="text-left">
                         <div className="font-bold text-slate-900">{formatCurrency(stream.monthlyAmount)}</div>
                         <div className={`text-xs ${isPaid ? 'text-emerald-600' : 'text-red-600 font-semibold'}`}>
-                          {isPaid ? 'שולם' : 'לא שולם'}
+                          {isPaid ? (
+                            receipt?.method ? (
+                              <span>שולם {getMethodInfo(receipt.method).emoji} {getMethodInfo(receipt.method).label}</span>
+                            ) : 'שולם'
+                          ) : 'לא שולם'}
                         </div>
                       </div>
                       {!isPaid && stream.renterPhone && (
@@ -582,6 +595,21 @@ export default function AdditionalIncome() {
           </div>
         </div>
       )}
+
+      {methodDialog && (() => {
+        const stream = activeStreams.find(s => s.id === methodDialog.streamId)
+        return (
+          <PaymentMethodDialog
+            subtitle={`${stream?.name || ''} · ${periodLabel(methodDialog.period, stream?.frequency || 'monthly')}`}
+            amount={stream?.monthlyAmount || 0}
+            onConfirm={(method, paidDate, note) => {
+              setIncomeReceipt(methodDialog.streamId, methodDialog.period, true, { method, paidDate, note })
+              setMethodDialog(null)
+            }}
+            onClose={() => setMethodDialog(null)}
+          />
+        )
+      })()}
     </div>
   )
 }
