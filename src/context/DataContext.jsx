@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import {
   collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc,
-  serverTimestamp, query, where, getDocs
+  serverTimestamp, query, where, getDocs, writeBatch
 } from 'firebase/firestore'
 import { db } from '../firebase/config.js'
 import { useAuth } from './AuthContext.jsx'
@@ -22,6 +22,8 @@ export const DataProvider = ({ children }) => {
   const [announcements, setAnnouncements] = useState([])
   const [incomeStreams, setIncomeStreams] = useState([])
   const [incomeReceipts, setIncomeReceipts] = useState([])
+  const [bankTransactions, setBankTransactions] = useState([])
+  const [balanceUpdates, setBalanceUpdates] = useState([])
   const [loading, setLoading] = useState(true)
 
   // Subscribe to building data
@@ -36,6 +38,8 @@ export const DataProvider = ({ children }) => {
       setAnnouncements([])
       setIncomeStreams([])
       setIncomeReceipts([])
+      setBankTransactions([])
+      setBalanceUpdates([])
       setLoading(false)
       return
     }
@@ -89,6 +93,16 @@ export const DataProvider = ({ children }) => {
     // Income receipts (monthly tracking for each stream)
     unsubs.push(onSnapshot(collection(db, 'buildings', buildingId, 'incomeReceipts'), (snap) => {
       setIncomeReceipts(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    }))
+
+    // Bank transactions (imported from bank statements)
+    unsubs.push(onSnapshot(collection(db, 'buildings', buildingId, 'bankTransactions'), (snap) => {
+      setBankTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    }))
+
+    // Manual balance updates
+    unsubs.push(onSnapshot(collection(db, 'buildings', buildingId, 'balanceUpdates'), (snap) => {
+      setBalanceUpdates(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     }))
 
     return () => unsubs.forEach(u => u())
@@ -325,6 +339,66 @@ export const DataProvider = ({ children }) => {
     }
   }, [buildingId, incomeStreams, incomeReceipts])
 
+  // ===== Balance Updates =====
+  const addBalanceUpdate = useCallback(async (amount, date, notes = '') => {
+    if (!buildingId) return
+    await addDoc(collection(db, 'buildings', buildingId, 'balanceUpdates'), {
+      amount: parseFloat(amount) || 0,
+      date: date || new Date().toISOString().slice(0, 10),
+      notes,
+      source: 'manual',
+      createdAt: serverTimestamp()
+    })
+  }, [buildingId])
+
+  const deleteBalanceUpdate = useCallback(async (id) => {
+    if (!buildingId) return
+    await deleteDoc(doc(db, 'buildings', buildingId, 'balanceUpdates', id))
+  }, [buildingId])
+
+  // ===== Bank Transactions =====
+  const addBankTransactions = useCallback(async (transactions, batchId, fileName) => {
+    if (!buildingId) return
+    // Add in chunks to avoid batch limit (500)
+    const chunks = []
+    for (let i = 0; i < transactions.length; i += 400) {
+      chunks.push(transactions.slice(i, i + 400))
+    }
+    for (const chunk of chunks) {
+      const batch = writeBatch(db)
+      for (const tx of chunk) {
+        const ref = doc(collection(db, 'buildings', buildingId, 'bankTransactions'))
+        batch.set(ref, {
+          ...tx,
+          batchId,
+          fileName: fileName || '',
+          importedAt: serverTimestamp()
+        })
+      }
+      await batch.commit()
+    }
+  }, [buildingId])
+
+  const updateBankTransaction = useCallback(async (id, patch) => {
+    if (!buildingId) return
+    await updateDoc(doc(db, 'buildings', buildingId, 'bankTransactions', id), patch)
+  }, [buildingId])
+
+  const deleteBankTransaction = useCallback(async (id) => {
+    if (!buildingId) return
+    await deleteDoc(doc(db, 'buildings', buildingId, 'bankTransactions', id))
+  }, [buildingId])
+
+  const deleteBatchTransactions = useCallback(async (batchId) => {
+    if (!buildingId) return
+    const q = query(
+      collection(db, 'buildings', buildingId, 'bankTransactions'),
+      where('batchId', '==', batchId)
+    )
+    const snap = await getDocs(q)
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)))
+  }, [buildingId])
+
   const exportData = useCallback(() => {
     const data = { building, tenants, payments, expenses, projects, projectPayments, announcements, incomeStreams, incomeReceipts }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -335,6 +409,8 @@ export const DataProvider = ({ children }) => {
     a.click()
     URL.revokeObjectURL(url)
   }, [building, tenants, payments, expenses, projects, projectPayments, announcements, incomeStreams, incomeReceipts])
+
+  // ===== Need writeBatch import =====
 
   // Tenant view: own data
   const myPayments = useMemo(() => {
@@ -362,6 +438,8 @@ export const DataProvider = ({ children }) => {
     announcements,
     incomeStreams,
     incomeReceipts,
+    bankTransactions,
+    balanceUpdates,
     categories,
     loading,
     // Tenant-scoped helpers
@@ -378,6 +456,8 @@ export const DataProvider = ({ children }) => {
     setProjectPayment,
     addAnnouncement, deleteAnnouncement,
     addIncomeStream, updateIncomeStream, deleteIncomeStream, setIncomeReceipt,
+    addBalanceUpdate, deleteBalanceUpdate,
+    addBankTransactions, updateBankTransaction, deleteBankTransaction, deleteBatchTransactions,
     exportData
   }
 

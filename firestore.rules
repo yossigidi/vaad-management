@@ -92,6 +92,16 @@ service cloud.firestore {
         allow read: if isInBuilding(buildingId);
         allow create, update, delete: if isAdminOf(buildingId);
       }
+
+      // Bank transactions (admin only)
+      match /bankTransactions/{tId} {
+        allow read, create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Manual balance updates (admin only)
+      match /balanceUpdates/{uId} {
+        allow read, create, update, delete: if isAdminOf(buildingId);
+      }
     }
   }
 }
