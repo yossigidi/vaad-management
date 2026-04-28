@@ -46,8 +46,14 @@ export const monthsBetween = (start, end) => {
   return months
 }
 
+// End of current year (for showing full year incl. future months for advance payments)
+export const endOfCurrentYear = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-12`
+}
+
 export const monthsFromStart = (startMonth) => {
-  return monthsBetween(startMonth, currentMonth())
+  return monthsBetween(startMonth, endOfCurrentYear())
 }
 
 // ===== Period helpers for variable frequency billing =====
@@ -64,18 +70,19 @@ export const FREQUENCY_PERIODS_PER_YEAR = {
   yearly: 1
 }
 
-// Generate periods for a given frequency between start and current
+// Generate periods for a given frequency from start to END OF CURRENT YEAR
+// (allows marking future periods - e.g., if tenant pays the full year in advance)
 // Returns array of period strings:
 //   monthly: 'YYYY-MM'
 //   bi-monthly: 'YYYY-MM-MM' (e.g., '2026-01-02')
 //   yearly: 'YYYY'
 export const generatePeriods = (frequency, startMonth) => {
-  const cur = currentMonth()
+  const now = new Date()
+  const cy = now.getFullYear()
   const [sy, sm] = startMonth.split('-').map(Number)
-  const [cy, cm] = cur.split('-').map(Number)
 
   if (frequency === 'monthly' || !frequency) {
-    return monthsBetween(startMonth, cur)
+    return monthsBetween(startMonth, `${cy}-12`)
   }
 
   if (frequency === 'bi-monthly') {
@@ -83,7 +90,7 @@ export const generatePeriods = (frequency, startMonth) => {
     // Bi-monthly periods always start on odd months: 1, 3, 5, 7, 9, 11
     let y = sy
     let m = sm % 2 === 0 ? sm - 1 : sm
-    while (y < cy || (y === cy && m <= cm)) {
+    while (y < cy || (y === cy && m <= 11)) {
       periods.push(`${y}-${String(m).padStart(2, '0')}-${String(m + 1).padStart(2, '0')}`)
       m += 2
       if (m > 12) { m = 1; y++ }
@@ -134,9 +141,22 @@ export const monthlyEquivalent = (amount, frequency) => {
   return (Number(amount) || 0) * perYear / 12
 }
 
-// Get current period for a frequency
+// Get the CURRENT period (today) for a frequency - not last in list
 export const currentPeriodFor = (frequency, startMonth) => {
-  const periods = generatePeriods(frequency, startMonth)
-  return periods[periods.length - 1] || ''
+  const now = new Date()
+  const cy = now.getFullYear()
+  const cm = now.getMonth() + 1
+
+  if (frequency === 'monthly' || !frequency) {
+    return `${cy}-${String(cm).padStart(2, '0')}`
+  }
+  if (frequency === 'bi-monthly') {
+    const periodStart = cm % 2 === 0 ? cm - 1 : cm
+    return `${cy}-${String(periodStart).padStart(2, '0')}-${String(periodStart + 1).padStart(2, '0')}`
+  }
+  if (frequency === 'yearly') {
+    return String(cy)
+  }
+  return ''
 }
 

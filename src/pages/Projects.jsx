@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { Plus, Trash2, Hammer, Check, AlertCircle, ChevronRight, X, MessageCircle, Receipt, Edit2 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
 import { formatCurrency, formatDate } from '../utils/format.js'
+import PaymentMethodDialog from '../components/PaymentMethodDialog.jsx'
+import { getMethodInfo } from '../utils/paymentMethods.js'
 
 export default function Projects() {
   const {
@@ -282,6 +284,7 @@ function ProjectDetail({
   const [tab, setTab] = useState('payments')
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [editingExpenseId, setEditingExpenseId] = useState(null)
+  const [methodDialog, setMethodDialog] = useState(null) // tenantId or null
   const emptyExpense = {
     type: 'variable',
     category: categories[0] || 'אחר',
@@ -408,7 +411,13 @@ function ProjectDetail({
               return (
                 <div key={tenant.id} className={`p-4 flex items-center gap-4 ${!isPaid ? 'bg-red-50' : ''}`}>
                   <button
-                    onClick={() => setProjectPayment(project.id, tenant.id, !isPaid)}
+                    onClick={() => {
+                      if (isPaid) {
+                        if (confirm('לסמן כלא שולם?')) setProjectPayment(project.id, tenant.id, false)
+                      } else {
+                        setMethodDialog(tenant.id)
+                      }
+                    }}
                     className={`
                       w-12 h-12 rounded-xl flex items-center justify-center font-bold flex-shrink-0
                       ${isPaid
@@ -422,10 +431,20 @@ function ProjectDetail({
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-slate-900">דירה {tenant.apartmentNumber} - {tenant.name}</div>
                     <div className={`text-sm ${isPaid ? 'text-emerald-600' : 'text-red-600 font-semibold'}`}>
-                      {isPaid
-                        ? `שולם ${payment.paidDate ? '· ' + new Date(payment.paidDate).toLocaleDateString('he-IL') : ''}`
-                        : 'לא שולם'
-                      }
+                      {isPaid ? (
+                        <span className="flex items-center gap-1 flex-wrap">
+                          <span>שולם</span>
+                          {payment.method && (
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded px-1.5 text-xs">
+                              <span>{getMethodInfo(payment.method).emoji}</span>
+                              <span>{getMethodInfo(payment.method).label}</span>
+                            </span>
+                          )}
+                          {payment.paidDate && (
+                            <span className="text-slate-400 text-xs">· {new Date(payment.paidDate).toLocaleDateString('he-IL')}</span>
+                          )}
+                        </span>
+                      ) : 'לא שולם'}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -594,6 +613,21 @@ function ProjectDetail({
           </div>
         </div>
       )}
+
+      {methodDialog && (() => {
+        const tenant = activeTenants.find(t => t.id === methodDialog)
+        return (
+          <PaymentMethodDialog
+            subtitle={`${project.name} · דירה ${tenant?.apartmentNumber} - ${tenant?.name}`}
+            amount={project.perTenantAmount}
+            onConfirm={(method, paidDate, note) => {
+              setProjectPayment(project.id, methodDialog, true, { method, paidDate, note })
+              setMethodDialog(null)
+            }}
+            onClose={() => setMethodDialog(null)}
+          />
+        )
+      })()}
     </div>
   )
 }
