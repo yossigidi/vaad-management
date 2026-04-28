@@ -4,7 +4,11 @@ import {
   Car, Box, Radio, Building, ChevronRight, ChevronLeft, MessageCircle
 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, monthLabel, monthShort, monthsFromStart, currentMonth, formatDate } from '../utils/format.js'
+import {
+  formatCurrency, monthLabel, monthShort, monthsFromStart, currentMonth, formatDate,
+  generatePeriods, periodLabel, periodShort, currentPeriodFor, monthlyEquivalent,
+  FREQUENCY_LABELS, FREQUENCY_PERIODS_PER_YEAR
+} from '../utils/format.js'
 import AttachmentManager from '../components/AttachmentManager.jsx'
 
 const STREAM_TYPES = [
@@ -33,11 +37,14 @@ export default function AdditionalIncome() {
   const [editingId, setEditingId] = useState(null)
   const [view, setView] = useState('list') // 'list' | 'month'
   const [selectedMonth, setSelectedMonth] = useState(currentMonth())
+  const [freqTab, setFreqTab] = useState('monthly') // 'monthly' | 'bi-monthly' | 'yearly'
+  const [selectedPeriod, setSelectedPeriod] = useState('')
 
   const emptyForm = {
     type: 'parking',
     name: '',
     monthlyAmount: '',
+    frequency: 'monthly',
     renterName: '',
     renterPhone: '',
     notes: '',
@@ -71,6 +78,7 @@ export default function AdditionalIncome() {
       type: stream.type || 'other',
       name: stream.name,
       monthlyAmount: String(stream.monthlyAmount),
+      frequency: stream.frequency || 'monthly',
       renterName: stream.renterName || '',
       renterPhone: stream.renterPhone || '',
       notes: stream.notes || '',
@@ -88,35 +96,66 @@ export default function AdditionalIncome() {
   }
 
   const stats = useMemo(() => {
-    const expectedMonthly = activeStreams.reduce((s, x) => s + (Number(x.monthlyAmount) || 0), 0)
-    const collectedThisMonth = incomeReceipts
-      .filter(r => r.month === currentMonth() && r.paid)
-      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    // Monthly equivalent: bi-monthly = amount/2 per month, yearly = amount/12 per month
+    const expectedMonthly = activeStreams.reduce((s, x) =>
+      s + monthlyEquivalent(x.monthlyAmount, x.frequency), 0
+    )
     const totalCollected = incomeReceipts
       .filter(r => r.paid)
       .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    // Debtors = streams with current period unpaid
     const debtors = activeStreams.filter(s => {
-      const r = incomeReceipts.find(x => x.streamId === s.id && x.month === currentMonth())
+      const period = currentPeriodFor(s.frequency || 'monthly', building?.startMonth || '2026-01')
+      const r = incomeReceipts.find(x => x.streamId === s.id && x.month === period)
       return !r || !r.paid
     })
-    return { expectedMonthly, collectedThisMonth, totalCollected, debtors }
-  }, [activeStreams, incomeReceipts])
+    const collectedThisPeriod = activeStreams.reduce((s, x) => {
+      const period = currentPeriodFor(x.frequency || 'monthly', building?.startMonth || '2026-01')
+      const r = incomeReceipts.find(rec => rec.streamId === x.id && rec.month === period)
+      return s + (r?.paid ? Number(r.amount || 0) : 0)
+    }, 0)
+    return { expectedMonthly, collectedThisMonth: collectedThisPeriod, totalCollected, debtors }
+  }, [activeStreams, incomeReceipts, building])
+
+  // Streams filtered to selected frequency tab
+  const freqStreams = useMemo(() =>
+    activeStreams.filter(s => (s.frequency || 'monthly') === freqTab)
+  , [activeStreams, freqTab])
+
+  // Periods for the selected frequency
+  const freqPeriods = useMemo(() =>
+    building ? generatePeriods(freqTab, building.startMonth) : []
+  , [building, freqTab])
+
+  // Default selectedPeriod when tab changes - pick last period
+  useMemo(() => {
+    if (freqPeriods.length > 0 && !freqPeriods.includes(selectedPeriod)) {
+      setSelectedPeriod(freqPeriods[freqPeriods.length - 1])
+    }
+  }, [freqPeriods, selectedPeriod])
 
   const monthStats = useMemo(() => {
-    const paidStreams = activeStreams.filter(s => {
-      const r = incomeReceipts.find(x => x.streamId === s.id && x.month === selectedMonth)
+    const paidStreams = freqStreams.filter(s => {
+      const r = incomeReceipts.find(x => x.streamId === s.id && x.month === selectedPeriod)
       return r?.paid
     })
     const collected = paidStreams.reduce((s, x) => s + (Number(x.monthlyAmount) || 0), 0)
-    const expected = activeStreams.reduce((s, x) => s + (Number(x.monthlyAmount) || 0), 0)
+    const expected = freqStreams.reduce((s, x) => s + (Number(x.monthlyAmount) || 0), 0)
     return {
       paidCount: paidStreams.length,
-      unpaidCount: activeStreams.length - paidStreams.length,
+      unpaidCount: freqStreams.length - paidStreams.length,
       collected,
       expected,
       percent: expected ? Math.round((collected / expected) * 100) : 0
     }
-  }, [activeStreams, incomeReceipts, selectedMonth])
+  }, [freqStreams, incomeReceipts, selectedPeriod])
+
+  // Counts per frequency for the tabs
+  const freqCounts = useMemo(() => ({
+    monthly: activeStreams.filter(s => (s.frequency || 'monthly') === 'monthly').length,
+    'bi-monthly': activeStreams.filter(s => s.frequency === 'bi-monthly').length,
+    yearly: activeStreams.filter(s => s.frequency === 'yearly').length
+  }), [activeStreams])
 
   return (
     <div className="space-y-6">
@@ -173,38 +212,56 @@ export default function AdditionalIncome() {
 
       {view === 'month' ? (
         <>
-          {/* Month selector */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
-            <button
-              onClick={() => {
-                const idx = months.indexOf(selectedMonth)
-                if (idx > 0) setSelectedMonth(months[idx - 1])
-              }}
-              disabled={months.indexOf(selectedMonth) === 0}
-              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
-            >
-              <ChevronRight size={20} />
-            </button>
-            <select
-              value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
-              className="font-bold text-xl text-slate-900 bg-transparent border-none focus:outline-none cursor-pointer"
-            >
-              {months.map(m => (
-                <option key={m} value={m}>{monthLabel(m)}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => {
-                const idx = months.indexOf(selectedMonth)
-                if (idx < months.length - 1) setSelectedMonth(months[idx + 1])
-              }}
-              disabled={months.indexOf(selectedMonth) === months.length - 1}
-              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
-            >
-              <ChevronLeft size={20} />
-            </button>
+          {/* Frequency tabs */}
+          <div className="flex bg-white rounded-xl p-1 border border-slate-200 w-fit">
+            {['monthly', 'bi-monthly', 'yearly'].map(f => (
+              <button
+                key={f}
+                onClick={() => setFreqTab(f)}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 ${freqTab === f ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                {FREQUENCY_LABELS[f]}
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${freqTab === f ? 'bg-white/20' : 'bg-slate-100'}`}>
+                  {freqCounts[f]}
+                </span>
+              </button>
+            ))}
           </div>
+
+          {/* Period selector */}
+          {freqPeriods.length > 0 && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  const idx = freqPeriods.indexOf(selectedPeriod)
+                  if (idx > 0) setSelectedPeriod(freqPeriods[idx - 1])
+                }}
+                disabled={freqPeriods.indexOf(selectedPeriod) === 0}
+                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
+              >
+                <ChevronRight size={20} />
+              </button>
+              <select
+                value={selectedPeriod}
+                onChange={e => setSelectedPeriod(e.target.value)}
+                className="font-bold text-xl text-slate-900 bg-transparent border-none focus:outline-none cursor-pointer"
+              >
+                {freqPeriods.map(p => (
+                  <option key={p} value={p}>{periodLabel(p, freqTab)}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  const idx = freqPeriods.indexOf(selectedPeriod)
+                  if (idx < freqPeriods.length - 1) setSelectedPeriod(freqPeriods[idx + 1])
+                }}
+                disabled={freqPeriods.indexOf(selectedPeriod) === freqPeriods.length - 1}
+                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-30"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100">
@@ -225,21 +282,25 @@ export default function AdditionalIncome() {
             </div>
           </div>
 
-          {activeStreams.length === 0 ? (
-            <EmptyState onAdd={() => setShowForm(true)} />
+          {freqStreams.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 text-center border border-slate-100">
+              <p className="text-slate-500">
+                אין הכנסות {FREQUENCY_LABELS[freqTab]}. עבור לתצוגת רשימה כדי להוסיף.
+              </p>
+            </div>
           ) : (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="divide-y divide-slate-100">
-                {activeStreams.map(stream => {
+                {freqStreams.map(stream => {
                   const typeInfo = STREAM_TYPES.find(t => t.id === stream.type) || STREAM_TYPES[STREAM_TYPES.length - 1]
                   const Icon = typeInfo.icon
                   const colors = colorClasses[typeInfo.color]
-                  const receipt = incomeReceipts.find(r => r.streamId === stream.id && r.month === selectedMonth)
+                  const receipt = incomeReceipts.find(r => r.streamId === stream.id && r.month === selectedPeriod)
                   const isPaid = !!receipt?.paid
                   return (
                     <div key={stream.id} className={`p-4 flex items-center gap-4 ${!isPaid ? 'bg-red-50' : ''}`}>
                       <button
-                        onClick={() => setIncomeReceipt(stream.id, selectedMonth, !isPaid)}
+                        onClick={() => setIncomeReceipt(stream.id, selectedPeriod, !isPaid)}
                         className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold flex-shrink-0
                           ${isPaid ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-red-100 text-red-600 hover:bg-red-200 border-2 border-red-300'}`}
                       >
@@ -262,7 +323,7 @@ export default function AdditionalIncome() {
                       </div>
                       {!isPaid && stream.renterPhone && (
                         <a
-                          href={`https://wa.me/972${stream.renterPhone.replace(/\D/g, '').replace(/^0/, '')}?text=${encodeURIComponent(`שלום ${stream.renterName || ''}, תזכורת - תשלום ${stream.name} עבור ${monthLabel(selectedMonth)} בסך ${formatCurrency(stream.monthlyAmount)} עדיין לא שולם.`)}`}
+                          href={`https://wa.me/972${stream.renterPhone.replace(/\D/g, '').replace(/^0/, '')}?text=${encodeURIComponent(`שלום ${stream.renterName || ''}, תזכורת - תשלום ${stream.name} עבור ${periodLabel(selectedPeriod, freqTab)} בסך ${formatCurrency(stream.monthlyAmount)} עדיין לא שולם.`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
@@ -320,8 +381,15 @@ export default function AdditionalIncome() {
                     </div>
 
                     <div className="bg-slate-50 rounded-xl p-3 mb-3">
-                      <div className="text-xs text-slate-500">סכום חודשי</div>
+                      <div className="text-xs text-slate-500">
+                        סכום {stream.frequency === 'bi-monthly' ? 'דו-חודשי' : stream.frequency === 'yearly' ? 'שנתי' : 'חודשי'}
+                      </div>
                       <div className="text-2xl font-bold text-slate-900">{formatCurrency(stream.monthlyAmount)}</div>
+                      {stream.frequency && stream.frequency !== 'monthly' && (
+                        <div className="text-xs text-slate-400 mt-1">
+                          ≈ {formatCurrency(monthlyEquivalent(stream.monthlyAmount, stream.frequency))}/חודש
+                        </div>
+                      )}
                     </div>
 
                     {stream.renterName && (
@@ -413,7 +481,25 @@ export default function AdditionalIncome() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">סכום חודשי (₪)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">תדירות גביה</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['monthly', 'bi-monthly', 'yearly'].map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setForm({ ...form, frequency: f })}
+                      className={`p-2 rounded-lg border-2 text-sm font-semibold ${form.frequency === f ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}
+                    >
+                      {FREQUENCY_LABELS[f]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  סכום {form.frequency === 'monthly' ? 'חודשי' : form.frequency === 'bi-monthly' ? 'דו-חודשי' : 'שנתי'} (₪)
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -422,6 +508,11 @@ export default function AdditionalIncome() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2"
                   required
                 />
+                {form.monthlyAmount && form.frequency !== 'monthly' && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    שווה ערך חודשי: <strong>{formatCurrency(monthlyEquivalent(form.monthlyAmount, form.frequency))}</strong>
+                  </p>
+                )}
               </div>
 
               <div>
