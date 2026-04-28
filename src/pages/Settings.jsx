@@ -19,6 +19,7 @@ export default function Settings() {
       address: draft.address || '',
       monthlyFee: parseFloat(draft.monthlyFee) || 0,
       startMonth: draft.startMonth || '2026-01',
+      paymentFrequency: draft.paymentFrequency || 'monthly',
       bankAccount: draft.bankAccount || '',
       contactName: draft.contactName || '',
       contactPhone: draft.contactPhone || '',
@@ -86,6 +87,7 @@ export default function Settings() {
               onChange={e => setDraft({ ...draft, monthlyFee: e.target.value })}
               className="w-full border border-slate-300 rounded-lg px-3 py-2"
             />
+            <p className="text-xs text-slate-500 mt-1">סכום בסיסי לחודש - יוכפל אוטומטית לפי תדירות הגביה</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">חודש התחלה</label>
@@ -95,6 +97,40 @@ export default function Settings() {
               onChange={e => setDraft({ ...draft, startMonth: e.target.value })}
               className="w-full border border-slate-300 rounded-lg px-3 py-2"
             />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1">תדירות גביה</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'monthly', label: 'חודשי', sub: '12 פעמים בשנה' },
+                { id: 'bi-monthly', label: 'דו-חודשי', sub: '6 פעמים בשנה' },
+                { id: 'yearly', label: 'שנתי', sub: 'פעם בשנה' }
+              ].map(f => {
+                const isActive = (draft.paymentFrequency || 'monthly') === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setDraft({ ...draft, paymentFrequency: f.id })}
+                    className={`p-3 rounded-lg border-2 text-center ${isActive ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}
+                  >
+                    <div className={`font-bold ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>{f.label}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{f.sub}</div>
+                  </button>
+                )
+              })}
+            </div>
+            {draft.paymentFrequency && draft.paymentFrequency !== 'monthly' && draft.monthlyFee && (
+              <p className="text-xs text-blue-700 bg-blue-50 rounded p-2 mt-2">
+                💡 כל דייר ישלם {' '}
+                <strong>
+                  {draft.paymentFrequency === 'bi-monthly'
+                    ? `${(parseFloat(draft.monthlyFee) * 2).toFixed(0)}₪ כל חודשיים`
+                    : `${(parseFloat(draft.monthlyFee) * 12).toFixed(0)}₪ פעם בשנה`
+                  }
+                </strong>
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">חשבון בנק (אופציונלי)</label>

@@ -5,22 +5,28 @@ import {
 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
-import { formatCurrency, monthLabel, monthsFromStart, currentMonth, formatDate } from '../utils/format.js'
+import {
+  formatCurrency, monthLabel, monthsFromStart, currentMonth, formatDate,
+  generatePeriods, periodLabel, FREQUENCY_PERIODS_PER_YEAR
+} from '../utils/format.js'
 
 export default function TenantDashboard({ onChangePassword }) {
   const { building, payments, expenses, projects, projectPayments, myPayments, myProjectPayments, myTenant } = useData()
   const { profile, logout } = useAuth()
   const [tab, setTab] = useState('mine')
 
-  const months = useMemo(() => building ? monthsFromStart(building.startMonth) : [], [building])
+  const frequency = building?.paymentFrequency || 'monthly'
+  const periodsPerYear = FREQUENCY_PERIODS_PER_YEAR[frequency]
+  const amountPerPeriod = (building?.monthlyFee || 0) * (12 / periodsPerYear)
+  const months = useMemo(() => building ? generatePeriods(frequency, building.startMonth) : [], [building, frequency])
   const month = currentMonth()
 
   const myStats = useMemo(() => {
     if (!building || !myTenant) return null
-    const totalPaid = myPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount || building.monthlyFee), 0)
+    const totalPaid = myPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount || amountPerPeriod), 0)
     const paidMonths = myPayments.filter(p => p.paid).map(p => p.month)
     const unpaidMonths = months.filter(m => !paidMonths.includes(m))
-    const totalDebt = unpaidMonths.length * building.monthlyFee
+    const totalDebt = unpaidMonths.length * amountPerPeriod
     const myProjectDebt = projects
       .filter(p => p.status === 'active')
       .reduce((s, p) => {
@@ -154,7 +160,9 @@ export default function TenantDashboard({ onChangePassword }) {
                   <Calendar size={18} />
                   היסטוריית תשלומי ועד
                 </h3>
-                <p className="text-sm text-slate-500 mt-1">דמי ועד: {formatCurrency(building.monthlyFee)} לחודש</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  דמי ועד: {formatCurrency(amountPerPeriod)} {frequency === 'monthly' ? 'לחודש' : frequency === 'bi-monthly' ? 'לחודשיים' : 'לשנה'}
+                </p>
               </div>
               <div className="divide-y divide-slate-100">
                 {months.map(m => {
@@ -166,7 +174,7 @@ export default function TenantDashboard({ onChangePassword }) {
                         {isPaid ? <CheckCircle2 size={20} /> : <AlertCircle size={18} />}
                       </div>
                       <div className="flex-1">
-                        <div className="font-semibold text-slate-900">{monthLabel(m)}</div>
+                        <div className="font-semibold text-slate-900">{periodLabel(m, frequency)}</div>
                         <div className={`text-xs ${isPaid ? 'text-emerald-600' : 'text-red-600 font-semibold'}`}>
                           {isPaid
                             ? `שולם ${p?.paidDate ? '· ' + new Date(p.paidDate).toLocaleDateString('he-IL') : ''}`
@@ -175,7 +183,7 @@ export default function TenantDashboard({ onChangePassword }) {
                         </div>
                       </div>
                       <div className={`font-bold ${isPaid ? 'text-slate-900' : 'text-red-600'}`}>
-                        {formatCurrency(building.monthlyFee)}
+                        {formatCurrency(amountPerPeriod)}
                       </div>
                     </div>
                   )

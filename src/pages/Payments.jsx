@@ -1,14 +1,40 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Check, AlertCircle, ChevronRight, ChevronLeft, MessageCircle, Phone, Mail } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, monthShort, monthLabel, monthsFromStart, currentMonth } from '../utils/format.js'
+import {
+  formatCurrency, monthShort, monthLabel, monthsFromStart, currentMonth,
+  generatePeriods, periodLabel, periodShort, currentPeriodFor,
+  FREQUENCY_LABELS, FREQUENCY_PERIODS_PER_YEAR
+} from '../utils/format.js'
 
 export default function Payments() {
   const { building, tenants, payments, setPayment } = useData()
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth())
-  const [view, setView] = useState('grid') // 'grid' | 'month'
+  const frequency = building?.paymentFrequency || 'monthly'
 
-  const months = useMemo(() => monthsFromStart(building.startMonth), [building.startMonth])
+  // Amount per period (e.g., yearly = monthlyFee × 12)
+  const periodsPerYear = FREQUENCY_PERIODS_PER_YEAR[frequency]
+  const amountPerPeriod = (building?.monthlyFee || 0) * (12 / periodsPerYear)
+
+  const periods = useMemo(
+    () => building ? generatePeriods(frequency, building.startMonth) : [],
+    [building, frequency]
+  )
+
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    building ? currentPeriodFor(frequency, building.startMonth) : currentMonth()
+  )
+  const [view, setView] = useState('grid') // 'grid' | 'month'
+  const [showMultiPay, setShowMultiPay] = useState(false)
+  const [multiPayPrefilledTenant, setMultiPayPrefilledTenant] = useState(null)
+
+  // Keep selected period valid when frequency changes
+  useMemo(() => {
+    if (periods.length > 0 && !periods.includes(selectedMonth)) {
+      setSelectedMonth(periods[periods.length - 1])
+    }
+  }, [periods, selectedMonth])
+
+  const months = periods // Keep variable name for backward compat in this file
   const sortedTenants = useMemo(
     () => [...tenants].filter(t => t.active).sort((a, b) => a.apartmentNumber - b.apartmentNumber),
     [tenants]
@@ -26,8 +52,8 @@ export default function Payments() {
   // Stats for selected month
   const monthStats = useMemo(() => {
     const paidCount = sortedTenants.filter(t => getPayment(t.id, selectedMonth)?.paid).length
-    const expected = sortedTenants.length * building.monthlyFee
-    const collected = paidCount * building.monthlyFee
+    const expected = sortedTenants.length * amountPerPeriod
+    const collected = paidCount * amountPerPeriod
     return {
       paidCount,
       unpaidCount: sortedTenants.length - paidCount,
@@ -35,12 +61,12 @@ export default function Payments() {
       collected,
       percent: expected ? Math.round((collected / expected) * 100) : 0
     }
-  }, [sortedTenants, selectedMonth, payments, building.monthlyFee])
+  }, [sortedTenants, selectedMonth, payments, amountPerPeriod])
 
   const debtors = sortedTenants.filter(t => !getPayment(t.id, selectedMonth)?.paid)
 
   const reminderText = (tenantName) => {
-    return `שלום ${tenantName},\nתזכורת ידידותית - דמי הוועד עבור ${monthLabel(selectedMonth)} בסך ${formatCurrency(building.monthlyFee)} עדיין לא שולמו.\nאנא דאגו להעביר בהקדם.\nתודה,\nועד בית ${building.name}`
+    return `שלום ${tenantName},\nתזכורת ידידותית - דמי הוועד עבור ${periodLabel(selectedMonth, frequency)} בסך ${formatCurrency(amountPerPeriod)} עדיין לא שולמו.\nאנא דאגו להעביר בהקדם.\nתודה,\nועד בית ${building.name}`
   }
 
   return (
@@ -48,7 +74,12 @@ export default function Payments() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-1">תשלומי ועד</h1>
-          <p className="text-slate-500">{formatCurrency(building.monthlyFee)} לדירה לחודש</p>
+          <p className="text-slate-500">
+            {formatCurrency(amountPerPeriod)} לדירה {frequency === 'monthly' ? 'לחודש' : frequency === 'bi-monthly' ? 'לחודשיים' : 'לשנה'}
+            {frequency !== 'monthly' && (
+              <span className="text-xs text-slate-400 mr-2">(שווה ל-{formatCurrency(building.monthlyFee)}/חודש)</span>
+            )}
+          </p>
         </div>
         <div className="flex bg-white rounded-xl p-1 border border-slate-200">
           <button
@@ -86,7 +117,7 @@ export default function Payments() {
               className="font-bold text-xl text-slate-900 bg-transparent border-none focus:outline-none cursor-pointer"
             >
               {months.map(m => (
-                <option key={m} value={m}>{monthLabel(m)}</option>
+                <option key={m} value={m}>{periodLabel(m, frequency)}</option>
               ))}
             </select>
             <button
@@ -119,6 +150,22 @@ export default function Payments() {
               <div className="text-sm text-slate-500">צפי</div>
               <div className="text-2xl font-bold text-slate-900">{formatCurrency(monthStats.expected)}</div>
             </div>
+          </div>
+
+          {/* Multi-period payment button */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="font-bold text-blue-900">דייר שילם מספר תקופות בבת אחת?</div>
+              <div className="text-sm text-blue-700">
+                למשל - הביא צ'ק על {frequency === 'monthly' ? '3 חודשים' : 'מספר תקופות'} מראש
+              </div>
+            </div>
+            <button
+              onClick={() => { setMultiPayPrefilledTenant(null); setShowMultiPay(true) }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold whitespace-nowrap"
+            >
+              💰 רשום תשלום מרובה
+            </button>
           </div>
 
           {/* Tenants list */}
@@ -166,7 +213,7 @@ export default function Payments() {
                         </a>
                       )}
                       <div className="text-left">
-                        <div className="font-bold text-slate-900">{formatCurrency(building.monthlyFee)}</div>
+                        <div className="font-bold text-slate-900">{formatCurrency(amountPerPeriod)}</div>
                       </div>
                     </div>
                   </div>
@@ -209,7 +256,7 @@ export default function Payments() {
                   </th>
                   {months.map(m => (
                     <th key={m} className="text-center p-2 font-semibold text-slate-700 text-xs whitespace-nowrap">
-                      {monthShort(m)}
+                      {periodShort(m, frequency)}
                     </th>
                   ))}
                   <th className="text-center p-3 font-semibold text-slate-700 bg-slate-50">סה"כ</th>
@@ -223,7 +270,7 @@ export default function Payments() {
                   }))
                   const paidCount = tenantPayments.filter(p => p.payment?.paid).length
                   const unpaidCount = tenantPayments.length - paidCount
-                  const debt = unpaidCount * building.monthlyFee
+                  const debt = unpaidCount * amountPerPeriod
                   return (
                     <tr key={tenant.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="p-3 sticky right-0 bg-white z-10 border-l border-slate-100">
@@ -243,7 +290,7 @@ export default function Payments() {
                                   : 'bg-red-100 text-red-600 hover:bg-red-200 border-2 border-red-300'
                                 }
                               `}
-                              title={isPaid ? `שולם - ${monthLabel(month)}` : `לא שולם - ${monthLabel(month)}`}
+                              title={isPaid ? `שולם - ${periodLabel(month, frequency)}` : `לא שולם - ${periodLabel(month, frequency)}`}
                             >
                               {isPaid ? <Check size={16} className="mx-auto" /> : '✕'}
                             </button>
@@ -264,6 +311,190 @@ export default function Payments() {
           </div>
         </div>
       )}
+
+      {showMultiPay && (
+        <MultiPaymentDialog
+          tenants={sortedTenants}
+          periods={periods}
+          frequency={frequency}
+          amountPerPeriod={amountPerPeriod}
+          getPayment={getPayment}
+          setPayment={setPayment}
+          prefilledTenantId={multiPayPrefilledTenant}
+          onClose={() => { setShowMultiPay(false); setMultiPayPrefilledTenant(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function MultiPaymentDialog({ tenants, periods, frequency, amountPerPeriod, getPayment, setPayment, prefilledTenantId, onClose }) {
+  const [tenantId, setTenantId] = useState(prefilledTenantId || tenants[0]?.id || '')
+  const [startPeriod, setStartPeriod] = useState(() => {
+    // Default to first unpaid period for selected tenant, else last
+    return periods[0] || ''
+  })
+  const [count, setCount] = useState(1)
+  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10))
+  const [submitting, setSubmitting] = useState(false)
+
+  // Suggest first unpaid period when tenant changes
+  useMemo(() => {
+    if (tenantId) {
+      const firstUnpaid = periods.find(p => !getPayment(tenantId, p)?.paid)
+      if (firstUnpaid) setStartPeriod(firstUnpaid)
+    }
+  }, [tenantId])
+
+  const startIdx = periods.indexOf(startPeriod)
+  const selectedPeriods = startIdx >= 0
+    ? periods.slice(startIdx, Math.min(startIdx + count, periods.length))
+    : []
+  const totalAmount = selectedPeriods.length * amountPerPeriod
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!tenantId || selectedPeriods.length === 0) return
+    setSubmitting(true)
+    try {
+      // Mark all selected periods as paid
+      for (const p of selectedPeriods) {
+        await setPayment(tenantId, p, true, { paidDate, note: `תשלום מרובה (${selectedPeriods.length} תקופות)` })
+      }
+      onClose()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const tenant = tenants.find(t => t.id === tenantId)
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-slate-900">💰 תשלום מרובה תקופות</h3>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700">✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">דייר</label>
+            <select
+              value={tenantId}
+              onChange={e => setTenantId(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              required
+            >
+              {tenants.map(t => (
+                <option key={t.id} value={t.id}>
+                  דירה {t.apartmentNumber} - {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {frequency === 'monthly' ? 'חודש התחלה' : 'תקופת התחלה'}
+            </label>
+            <select
+              value={startPeriod}
+              onChange={e => setStartPeriod(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              required
+            >
+              {periods.map(p => {
+                const isPaid = tenantId && getPayment(tenantId, p)?.paid
+                return (
+                  <option key={p} value={p}>
+                    {periodLabel(p, frequency)} {isPaid ? '✓ שולם' : ''}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              מספר תקופות לסימון
+            </label>
+            <div className="flex gap-2 items-center">
+              <button
+                type="button"
+                onClick={() => setCount(Math.max(1, count - 1))}
+                className="bg-slate-100 hover:bg-slate-200 w-10 h-10 rounded-lg font-bold text-xl"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min="1"
+                max={periods.length - startIdx}
+                value={count}
+                onChange={e => setCount(Math.max(1, parseInt(e.target.value) || 1))}
+                className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-center text-xl font-bold"
+              />
+              <button
+                type="button"
+                onClick={() => setCount(Math.min(periods.length - startIdx, count + 1))}
+                className="bg-slate-100 hover:bg-slate-200 w-10 h-10 rounded-lg font-bold text-xl"
+              >
+                +
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {frequency === 'monthly' ? 'מספר חודשים' : frequency === 'bi-monthly' ? 'מספר תקופות דו-חודשיות' : 'מספר שנים'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">תאריך התשלום</label>
+            <input
+              type="date"
+              value={paidDate}
+              onChange={e => setPaidDate(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              required
+            />
+          </div>
+
+          {/* Preview */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+            <div className="flex justify-between font-semibold text-emerald-900">
+              <span>תקופות לסימון:</span>
+              <span>{selectedPeriods.length}</span>
+            </div>
+            <div className="flex justify-between text-emerald-800">
+              <span>סכום כולל:</span>
+              <span className="font-bold">{formatCurrency(totalAmount)}</span>
+            </div>
+            {selectedPeriods.length > 0 && (
+              <div className="text-xs text-emerald-700 border-t border-emerald-200 pt-2">
+                {periodLabel(selectedPeriods[0], frequency)}
+                {selectedPeriods.length > 1 && ` ← ${periodLabel(selectedPeriods[selectedPeriods.length - 1], frequency)}`}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={submitting || selectedPeriods.length === 0}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-semibold disabled:opacity-50"
+            >
+              {submitting ? 'שומר...' : `סמן ${selectedPeriods.length} כשולם`}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-semibold"
+            >
+              ביטול
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

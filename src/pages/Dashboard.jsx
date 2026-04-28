@@ -9,7 +9,10 @@ import {
   Building2
 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, currentMonth, monthLabel, monthsFromStart } from '../utils/format.js'
+import {
+  formatCurrency, currentMonth, monthLabel, monthsFromStart,
+  generatePeriods, periodLabel, currentPeriodFor, FREQUENCY_PERIODS_PER_YEAR
+} from '../utils/format.js'
 
 const StatCard = ({ icon: Icon, label, value, color, sub }) => (
   <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
@@ -26,15 +29,18 @@ const StatCard = ({ icon: Icon, label, value, color, sub }) => (
 
 export default function Dashboard() {
   const { building, tenants, payments, expenses, projects, projectPayments, incomeStreams, incomeReceipts } = useData()
-  const month = currentMonth()
+  const frequency = building?.paymentFrequency || 'monthly'
+  const periodsPerYear = FREQUENCY_PERIODS_PER_YEAR[frequency]
+  const amountPerPeriod = (building?.monthlyFee || 0) * (12 / periodsPerYear)
+  const month = building ? currentPeriodFor(frequency, building.startMonth) : currentMonth()
 
   const stats = useMemo(() => {
     const activeTenants = tenants.filter(t => t.active)
-    const expectedThisMonth = activeTenants.length * building.monthlyFee
+    const expectedThisMonth = activeTenants.length * amountPerPeriod
 
     const paidThisMonth = payments
       .filter(p => p.month === month && p.paid)
-      .reduce((sum, p) => sum + (p.amount || building.monthlyFee), 0)
+      .reduce((sum, p) => sum + (p.amount || amountPerPeriod), 0)
 
     const debtors = activeTenants.filter(t => {
       const p = payments.find(x => x.tenantId === t.id && x.month === month)
@@ -62,13 +68,13 @@ export default function Dashboard() {
     // active projects
     const activeProjects = projects.filter(p => p.status === 'active')
 
-    // total debt across all months
-    const allMonths = monthsFromStart(building.startMonth)
+    // total debt across all periods
+    const allPeriods = generatePeriods(frequency, building.startMonth)
     let totalDebt = 0
     activeTenants.forEach(t => {
-      allMonths.forEach(m => {
+      allPeriods.forEach(m => {
         const p = payments.find(x => x.tenantId === t.id && x.month === m)
-        if (!p || !p.paid) totalDebt += building.monthlyFee
+        if (!p || !p.paid) totalDebt += amountPerPeriod
       })
     })
 
@@ -86,13 +92,13 @@ export default function Dashboard() {
       activeProjects,
       totalDebt
     }
-  }, [tenants, payments, expenses, projects, projectPayments, incomeStreams, incomeReceipts, building, month])
+  }, [tenants, payments, expenses, projects, projectPayments, incomeStreams, incomeReceipts, building, month, amountPerPeriod, frequency])
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 mb-1">דשבורד</h1>
-        <p className="text-slate-500">מבט מהיר על מצב הוועד - {monthLabel(month)}</p>
+        <p className="text-slate-500">מבט מהיר על מצב הוועד - {periodLabel(month, frequency)}</p>
       </div>
 
       {/* Building info card */}
@@ -106,8 +112,10 @@ export default function Dashboard() {
             <p className="text-blue-100">{building.address}</p>
           </div>
           <div className="text-left">
-            <div className="text-blue-200 text-sm">דמי ועד חודשי</div>
-            <div className="text-2xl font-bold">{formatCurrency(building.monthlyFee)}</div>
+            <div className="text-blue-200 text-sm">
+              דמי ועד {frequency === 'monthly' ? 'חודשי' : frequency === 'bi-monthly' ? 'דו-חודשי' : 'שנתי'}
+            </div>
+            <div className="text-2xl font-bold">{formatCurrency(amountPerPeriod)}</div>
             <div className="text-blue-200 text-xs mt-1">{tenants.filter(t => t.active).length} דיירים פעילים</div>
           </div>
         </div>
@@ -117,7 +125,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={CheckCircle2}
-          label={`נגבה ${monthLabel(month)}`}
+          label={`נגבה ${periodLabel(month, frequency)}`}
           value={formatCurrency(stats.paidThisMonth)}
           sub={`מתוך ${formatCurrency(stats.expectedThisMonth)} (${stats.paidPercent}%)`}
           color={{ bg: 'bg-emerald-50', text: 'text-emerald-600' }}
@@ -148,7 +156,7 @@ export default function Dashboard() {
       {/* Progress bar for current month */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-slate-900">התקדמות גביה - {monthLabel(month)}</h3>
+          <h3 className="font-semibold text-slate-900">התקדמות גביה - {periodLabel(month, frequency)}</h3>
           <span className="text-2xl font-bold text-blue-600">{stats.paidPercent}%</span>
         </div>
         <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
