@@ -1,48 +1,61 @@
-import { useState, useRef } from 'react'
-import { Save, Upload, Download, Trash2, AlertTriangle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Save, Download, Mail, MessageCircle, Building2 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Settings() {
-  const { building, updateBuilding, exportData, importData, resetData } = useData()
-  const [draft, setDraft] = useState({ ...building })
+  const { building, updateBuilding, exportData } = useData()
+  const { profile } = useAuth()
+  const [draft, setDraft] = useState({})
   const [saved, setSaved] = useState(false)
-  const fileRef = useRef(null)
 
-  const handleSave = () => {
-    updateBuilding({
-      ...draft,
-      monthlyFee: parseFloat(draft.monthlyFee) || 0
+  useEffect(() => {
+    if (building) setDraft({ ...building })
+  }, [building])
+
+  const handleSave = async () => {
+    await updateBuilding({
+      name: draft.name || '',
+      address: draft.address || '',
+      monthlyFee: parseFloat(draft.monthlyFee) || 0,
+      startMonth: draft.startMonth || '2026-01',
+      bankAccount: draft.bankAccount || '',
+      contactName: draft.contactName || '',
+      contactPhone: draft.contactPhone || '',
+      adminEmail: draft.adminEmail || '',
+      whatsappGroupLink: draft.whatsappGroupLink || ''
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const handleImport = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const ok = importData(ev.target.result)
-      if (ok) {
-        alert('הנתונים יובאו בהצלחה')
-        window.location.reload()
-      } else {
-        alert('שגיאה בייבוא הקובץ')
-      }
-    }
-    reader.readAsText(file)
-  }
+  if (!building) return null
 
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 mb-1">הגדרות</h1>
-        <p className="text-slate-500">פרטי הבניין ונתוני מערכת</p>
+        <p className="text-slate-500">פרטי הבניין והעדפות תקשורת</p>
+      </div>
+
+      {/* Account info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm">
+        <div className="flex items-center gap-2 text-blue-900 mb-1">
+          <Building2 size={16} />
+          <strong>פרטי החשבון</strong>
+        </div>
+        <div className="text-blue-800 space-y-1">
+          <div>קוד בניין: <strong className="font-mono">{building.buildingCode}</strong></div>
+          <div>שם משתמש אדמין: <strong className="font-mono">{profile?.username}</strong></div>
+        </div>
       </div>
 
       {/* Building info */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-        <h2 className="text-xl font-bold text-slate-900 mb-4">פרטי הבניין</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <Building2 size={20} />
+          פרטי הבניין
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">שם הוועד</label>
@@ -115,66 +128,78 @@ export default function Settings() {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between mt-6">
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold"
-          >
-            <Save size={18} />
-            שמור שינויים
-          </button>
-          {saved && (
-            <span className="text-emerald-600 font-semibold text-sm">✓ נשמר</span>
-          )}
-        </div>
       </div>
 
-      {/* Backup / Restore */}
+      {/* Communications */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-        <h2 className="text-xl font-bold text-slate-900 mb-4">גיבוי ושחזור</h2>
-        <p className="text-sm text-slate-500 mb-4">
-          המערכת שומרת נתונים על המחשב שלך בלבד. מומלץ לגבות את הנתונים מדי פעם.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={exportData}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold"
-          >
-            <Download size={18} />
-            הורד גיבוי
-          </button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold"
-          >
-            <Upload size={18} />
-            שחזר מגיבוי
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleImport}
-            className="hidden"
-          />
+        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <MessageCircle size={20} />
+          תקשורת
+        </h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              <Mail size={14} className="inline ml-1" />
+              אימייל הוועד (לשליחת הודעות לדיירים)
+            </label>
+            <input
+              type="email"
+              value={draft.adminEmail || ''}
+              onChange={e => setDraft({ ...draft, adminEmail: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              placeholder="vaad@example.com"
+              dir="ltr"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              הודעות יישלחו דרך לקוח האימייל המוגדר במחשב/טלפון שלך, עם BCC לכל הדיירים
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              <MessageCircle size={14} className="inline ml-1" />
+              קישור לקבוצת WhatsApp
+            </label>
+            <input
+              type="url"
+              value={draft.whatsappGroupLink || ''}
+              onChange={e => setDraft({ ...draft, whatsappGroupLink: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              placeholder="https://chat.whatsapp.com/..."
+              dir="ltr"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              לשליחת הודעות לקבוצת הדיירים בוואטסאפ
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Danger zone */}
-      <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertTriangle className="text-red-600" size={20} />
-          <h2 className="text-xl font-bold text-red-900">אזור מסוכן</h2>
-        </div>
-        <p className="text-sm text-red-700 mb-4">
-          מחיקה של כל הנתונים תאפס את המערכת. הפעולה לא הפיכה.
+      {/* Save button */}
+      <div className="flex items-center justify-between bg-white rounded-2xl p-4 shadow-sm border border-slate-100 sticky bottom-4">
+        <button
+          onClick={handleSave}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold"
+        >
+          <Save size={18} />
+          שמור שינויים
+        </button>
+        {saved && (
+          <span className="text-emerald-600 font-semibold text-sm">✓ נשמר</span>
+        )}
+      </div>
+
+      {/* Backup */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+        <h2 className="text-xl font-bold text-slate-900 mb-3">גיבוי נתונים</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          הנתונים שלך נשמרים אוטומטית בענן (Firestore). תוכל להוריד גיבוי JSON מקומי בכל עת.
         </p>
         <button
-          onClick={resetData}
-          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold"
+          onClick={exportData}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold"
         >
-          <Trash2 size={18} />
-          מחק את כל הנתונים
+          <Download size={18} />
+          הורד גיבוי JSON
         </button>
       </div>
     </div>

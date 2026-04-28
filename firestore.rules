@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userDoc().role == 'admin';
+    }
+
+    function isInBuilding(buildingId) {
+      return isSignedIn() && userDoc().buildingId == buildingId;
+    }
+
+    function isAdminOf(buildingId) {
+      return isAdmin() && isInBuilding(buildingId);
+    }
+
+    function isTenantOf(buildingId) {
+      return isSignedIn() && userDoc().role == 'tenant' && userDoc().buildingId == buildingId;
+    }
+
+    // Users collection: each user can read their own doc.
+    // Admins can read users in their building (for management).
+    // During signup, the freshly authenticated user creates their own doc.
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId
+                  || (isSignedIn() && resource.data.buildingId == userDoc().buildingId && isAdmin());
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId
+                    || (isSignedIn() && resource.data.buildingId == userDoc().buildingId && isAdmin());
+      allow delete: if false;
+    }
+
+    // Buildings: admin can read/write their building. Tenants read-only.
+    match /buildings/{buildingId} {
+      allow read: if isInBuilding(buildingId);
+      allow create: if isSignedIn(); // signup creates building right after admin user doc
+      allow update, delete: if isAdminOf(buildingId);
+
+      // Tenants subcollection
+      match /tenants/{tenantId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Payments
+      match /payments/{paymentId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Expenses
+      match /expenses/{expenseId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Projects
+      match /projects/{projectId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Project payments
+      match /projectPayments/{ppId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Announcements
+      match /announcements/{aId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+    }
+  }
+}
