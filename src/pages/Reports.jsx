@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { FileSpreadsheet, FileText, Download, Printer } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import { useData } from '../context/DataContext.jsx'
 import { formatCurrency, formatDate, monthLabel, monthsFromStart, currentMonth } from '../utils/format.js'
 
@@ -10,7 +9,8 @@ export default function Reports() {
 
   const months = monthsFromStart(building.startMonth)
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     // Sheet 1: Tenants

@@ -1,22 +1,26 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import {
   LayoutDashboard, Users, Wallet, Receipt, Hammer, FileText,
   Settings as SettingsIcon, Building2, Menu, X, MessageSquare, LogOut, Lock
 } from 'lucide-react'
 import { useAuth } from './context/AuthContext.jsx'
 import { useData } from './context/DataContext.jsx'
+
+// Auth pages - small, can stay eager
 import Login from './pages/auth/Login.jsx'
-import Signup from './pages/auth/Signup.jsx'
-import ChangePassword from './pages/auth/ChangePassword.jsx'
-import Dashboard from './pages/Dashboard.jsx'
-import Tenants from './pages/Tenants.jsx'
-import Payments from './pages/Payments.jsx'
-import Expenses from './pages/Expenses.jsx'
-import Projects from './pages/Projects.jsx'
-import Reports from './pages/Reports.jsx'
-import Settings from './pages/Settings.jsx'
-import Communications from './pages/Communications.jsx'
-import TenantDashboard from './pages/TenantDashboard.jsx'
+
+// Lazy-loaded pages (each becomes its own chunk, downloaded on demand)
+const Signup = lazy(() => import('./pages/auth/Signup.jsx'))
+const ChangePassword = lazy(() => import('./pages/auth/ChangePassword.jsx'))
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
+const Tenants = lazy(() => import('./pages/Tenants.jsx'))
+const Payments = lazy(() => import('./pages/Payments.jsx'))
+const Expenses = lazy(() => import('./pages/Expenses.jsx'))
+const Projects = lazy(() => import('./pages/Projects.jsx'))
+const Reports = lazy(() => import('./pages/Reports.jsx'))
+const Settings = lazy(() => import('./pages/Settings.jsx'))
+const Communications = lazy(() => import('./pages/Communications.jsx'))
+const TenantDashboard = lazy(() => import('./pages/TenantDashboard.jsx'))
 
 const ADMIN_PAGES = [
   { id: 'dashboard', label: 'דשבורד', icon: LayoutDashboard, component: Dashboard },
@@ -29,6 +33,21 @@ const ADMIN_PAGES = [
   { id: 'settings', label: 'הגדרות', icon: SettingsIcon, component: Settings }
 ]
 
+const PageLoader = () => (
+  <div className="flex items-center justify-center py-20">
+    <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full" />
+  </div>
+)
+
+const FullScreenLoader = ({ label = 'טוען...' }) => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="text-center">
+      <div className="animate-spin h-10 w-10 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
+      <p className="text-slate-500">{label}</p>
+    </div>
+  </div>
+)
+
 export default function App() {
   const { loading, user, profile, isAdmin, isTenant, mustChangePassword, logout } = useAuth()
   const { building, loading: dataLoading } = useData()
@@ -38,67 +57,66 @@ export default function App() {
   const [showChangePassword, setShowChangePassword] = useState(false)
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin h-10 w-10 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-slate-500">טוען...</p>
-        </div>
-      </div>
-    )
+    return <FullScreenLoader />
   }
 
   // Not logged in
   if (!user || !profile) {
-    return authPage === 'signup'
-      ? <Signup onLogin={() => setAuthPage('login')} />
-      : <Login onSignup={() => setAuthPage('signup')} />
+    return authPage === 'signup' ? (
+      <Suspense fallback={<FullScreenLoader />}>
+        <Signup onLogin={() => setAuthPage('login')} />
+      </Suspense>
+    ) : (
+      <Login onSignup={() => setAuthPage('signup')} />
+    )
   }
 
   // Forced password change
   if (mustChangePassword) {
-    return <ChangePassword forced />
+    return (
+      <Suspense fallback={<FullScreenLoader />}>
+        <ChangePassword forced />
+      </Suspense>
+    )
   }
 
   // Voluntary password change
   if (showChangePassword) {
     return (
-      <div>
-        <ChangePassword />
-        <div className="fixed top-4 left-4 z-50">
-          <button
-            onClick={() => setShowChangePassword(false)}
-            className="bg-white shadow-lg px-4 py-2 rounded-lg font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            ← חזור
-          </button>
+      <Suspense fallback={<FullScreenLoader />}>
+        <div>
+          <ChangePassword />
+          <div className="fixed top-4 left-4 z-50">
+            <button
+              onClick={() => setShowChangePassword(false)}
+              className="bg-white shadow-lg px-4 py-2 rounded-lg font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              ← חזור
+            </button>
+          </div>
         </div>
-      </div>
+      </Suspense>
     )
   }
 
   // Tenant view
   if (isTenant) {
-    return <TenantDashboard onChangePassword={() => setShowChangePassword(true)} />
+    return (
+      <Suspense fallback={<FullScreenLoader label="טוען נתונים..." />}>
+        <TenantDashboard onChangePassword={() => setShowChangePassword(true)} />
+      </Suspense>
+    )
   }
 
   // Loading building data for admin
   if (isAdmin && dataLoading && !building) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin h-10 w-10 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-slate-500">טוען נתוני בניין...</p>
-        </div>
-      </div>
-    )
+    return <FullScreenLoader label="טוען נתוני בניין..." />
   }
 
   const ActiveComponent = ADMIN_PAGES.find(p => p.id === activePage)?.component || Dashboard
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -106,7 +124,6 @@ export default function App() {
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 right-0 z-50
         w-72 bg-white border-l border-slate-200 shadow-xl lg:shadow-none
@@ -185,7 +202,6 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between">
           <button onClick={() => setSidebarOpen(true)} className="text-slate-700">
@@ -198,7 +214,9 @@ export default function App() {
         </header>
 
         <div className="flex-1 p-4 lg:p-8 overflow-y-auto">
-          <ActiveComponent />
+          <Suspense fallback={<PageLoader />}>
+            <ActiveComponent />
+          </Suspense>
         </div>
       </main>
     </div>
