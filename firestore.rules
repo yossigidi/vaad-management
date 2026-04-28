@@ -80,6 +80,18 @@ service cloud.firestore {
         allow read: if isInBuilding(buildingId);
         allow create, update, delete: if isAdminOf(buildingId);
       }
+
+      // Income streams (parking, storage, etc.)
+      match /incomeStreams/{sId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
+
+      // Income receipts (monthly tracking)
+      match /incomeReceipts/{rId} {
+        allow read: if isInBuilding(buildingId);
+        allow create, update, delete: if isAdminOf(buildingId);
+      }
     }
   }
 }

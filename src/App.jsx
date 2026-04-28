@@ -1,7 +1,8 @@
 import { useState, lazy, Suspense } from 'react'
 import {
   LayoutDashboard, Users, Wallet, Receipt, Hammer, FileText,
-  Settings as SettingsIcon, Building2, Menu, X, MessageSquare, LogOut, Lock
+  Settings as SettingsIcon, Building2, Menu, X, MessageSquare, LogOut, Lock,
+  TrendingUp
 } from 'lucide-react'
 import { useAuth } from './context/AuthContext.jsx'
 import { useData } from './context/DataContext.jsx'
@@ -20,12 +21,14 @@ const Projects = lazy(() => import('./pages/Projects.jsx'))
 const Reports = lazy(() => import('./pages/Reports.jsx'))
 const Settings = lazy(() => import('./pages/Settings.jsx'))
 const Communications = lazy(() => import('./pages/Communications.jsx'))
+const AdditionalIncome = lazy(() => import('./pages/AdditionalIncome.jsx'))
 const TenantDashboard = lazy(() => import('./pages/TenantDashboard.jsx'))
 
 const ADMIN_PAGES = [
   { id: 'dashboard', label: 'דשבורד', icon: LayoutDashboard, component: Dashboard },
   { id: 'tenants', label: 'דיירים', icon: Users, component: Tenants },
   { id: 'payments', label: 'תשלומי ועד', icon: Wallet, component: Payments },
+  { id: 'income', label: 'הכנסות נוספות', icon: TrendingUp, component: AdditionalIncome },
   { id: 'expenses', label: 'הוצאות', icon: Receipt, component: Expenses },
   { id: 'projects', label: 'פרויקטים', icon: Hammer, component: Projects },
   { id: 'communications', label: 'תקשורת', icon: MessageSquare, component: Communications },

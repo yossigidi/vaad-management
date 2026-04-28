@@ -25,7 +25,7 @@ const StatCard = ({ icon: Icon, label, value, color, sub }) => (
 )
 
 export default function Dashboard() {
-  const { building, tenants, payments, expenses, projects, projectPayments } = useData()
+  const { building, tenants, payments, expenses, projects, projectPayments, incomeStreams, incomeReceipts } = useData()
   const month = currentMonth()
 
   const stats = useMemo(() => {
@@ -41,8 +41,15 @@ export default function Dashboard() {
       return !p || !p.paid
     })
 
-    // total income (all months)
-    const totalIncome = payments.filter(p => p.paid).reduce((s, p) => s + (p.amount || 0), 0)
+    // total income (vaad + additional income streams)
+    const vaadIncome = payments.filter(p => p.paid).reduce((s, p) => s + (p.amount || 0), 0)
+    const projectIncome = projectPayments.filter(p => p.paid).reduce((s, p) => s + (p.amount || 0), 0)
+    const additionalIncome = incomeReceipts.filter(r => r.paid).reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    const totalIncome = vaadIncome + projectIncome + additionalIncome
+
+    const additionalIncomeThisMonth = incomeReceipts
+      .filter(r => r.month === month && r.paid)
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0)
 
     // total expenses
     const totalExpenses = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)
@@ -71,13 +78,15 @@ export default function Dashboard() {
       paidPercent: expectedThisMonth ? Math.round((paidThisMonth / expectedThisMonth) * 100) : 0,
       debtors,
       totalIncome,
+      additionalIncome,
+      additionalIncomeThisMonth,
       totalExpenses,
       balance: totalIncome - totalExpenses,
       expensesThisMonth,
       activeProjects,
       totalDebt
     }
-  }, [tenants, payments, expenses, projects, projectPayments, building, month])
+  }, [tenants, payments, expenses, projects, projectPayments, incomeStreams, incomeReceipts, building, month])
 
   return (
     <div className="space-y-6">

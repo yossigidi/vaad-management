@@ -20,6 +20,8 @@ export const DataProvider = ({ children }) => {
   const [projects, setProjects] = useState([])
   const [projectPayments, setProjectPayments] = useState([])
   const [announcements, setAnnouncements] = useState([])
+  const [incomeStreams, setIncomeStreams] = useState([])
+  const [incomeReceipts, setIncomeReceipts] = useState([])
   const [loading, setLoading] = useState(true)
 
   // Subscribe to building data
@@ -32,6 +34,8 @@ export const DataProvider = ({ children }) => {
       setProjects([])
       setProjectPayments([])
       setAnnouncements([])
+      setIncomeStreams([])
+      setIncomeReceipts([])
       setLoading(false)
       return
     }
@@ -75,6 +79,16 @@ export const DataProvider = ({ children }) => {
     // Announcements
     unsubs.push(onSnapshot(collection(db, 'buildings', buildingId, 'announcements'), (snap) => {
       setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    }))
+
+    // Income streams (parking, storage, etc.)
+    unsubs.push(onSnapshot(collection(db, 'buildings', buildingId, 'incomeStreams'), (snap) => {
+      setIncomeStreams(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    }))
+
+    // Income receipts (monthly tracking for each stream)
+    unsubs.push(onSnapshot(collection(db, 'buildings', buildingId, 'incomeReceipts'), (snap) => {
+      setIncomeReceipts(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     }))
 
     return () => unsubs.forEach(u => u())
@@ -259,8 +273,60 @@ export const DataProvider = ({ children }) => {
     await deleteDoc(doc(db, 'buildings', buildingId, 'announcements', id))
   }, [buildingId])
 
+  // ===== Income Streams =====
+  const addIncomeStream = useCallback(async (stream) => {
+    if (!buildingId) return
+    await addDoc(collection(db, 'buildings', buildingId, 'incomeStreams'), {
+      active: true,
+      startDate: new Date().toISOString().slice(0, 10),
+      ...stream,
+      createdAt: serverTimestamp()
+    })
+  }, [buildingId])
+
+  const updateIncomeStream = useCallback(async (id, patch) => {
+    if (!buildingId) return
+    await updateDoc(doc(db, 'buildings', buildingId, 'incomeStreams', id), patch)
+  }, [buildingId])
+
+  const deleteIncomeStream = useCallback(async (id) => {
+    if (!buildingId) return
+    await deleteDoc(doc(db, 'buildings', buildingId, 'incomeStreams', id))
+    const rQuery = query(
+      collection(db, 'buildings', buildingId, 'incomeReceipts'),
+      where('streamId', '==', id)
+    )
+    const rSnap = await getDocs(rQuery)
+    await Promise.all(rSnap.docs.map(d => deleteDoc(d.ref)))
+  }, [buildingId])
+
+  const setIncomeReceipt = useCallback(async (streamId, month, paid, options = {}) => {
+    if (!buildingId) return
+    const stream = incomeStreams.find(s => s.id === streamId)
+    const amount = options.amount ?? stream?.monthlyAmount ?? 0
+    const existing = incomeReceipts.find(r => r.streamId === streamId && r.month === month)
+    if (existing) {
+      await updateDoc(doc(db, 'buildings', buildingId, 'incomeReceipts', existing.id), {
+        paid,
+        amount,
+        paidDate: paid ? (options.paidDate || new Date().toISOString().slice(0, 10)) : null,
+        note: options.note ?? existing.note ?? ''
+      })
+    } else {
+      await addDoc(collection(db, 'buildings', buildingId, 'incomeReceipts'), {
+        streamId,
+        month,
+        paid,
+        amount,
+        paidDate: paid ? (options.paidDate || new Date().toISOString().slice(0, 10)) : null,
+        note: options.note || '',
+        createdAt: serverTimestamp()
+      })
+    }
+  }, [buildingId, incomeStreams, incomeReceipts])
+
   const exportData = useCallback(() => {
-    const data = { building, tenants, payments, expenses, projects, projectPayments, announcements }
+    const data = { building, tenants, payments, expenses, projects, projectPayments, announcements, incomeStreams, incomeReceipts }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -268,7 +334,7 @@ export const DataProvider = ({ children }) => {
     a.download = `vaad-backup-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [building, tenants, payments, expenses, projects, projectPayments, announcements])
+  }, [building, tenants, payments, expenses, projects, projectPayments, announcements, incomeStreams, incomeReceipts])
 
   // Tenant view: own data
   const myPayments = useMemo(() => {
@@ -294,6 +360,8 @@ export const DataProvider = ({ children }) => {
     projects,
     projectPayments,
     announcements,
+    incomeStreams,
+    incomeReceipts,
     categories,
     loading,
     // Tenant-scoped helpers
@@ -309,6 +377,7 @@ export const DataProvider = ({ children }) => {
     addProject, updateProject, deleteProject,
     setProjectPayment,
     addAnnouncement, deleteAnnouncement,
+    addIncomeStream, updateIncomeStream, deleteIncomeStream, setIncomeReceipt,
     exportData
   }
 
