@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, Trash2, Edit2, X, Check, Repeat, Zap, Filter } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, formatDate, monthLabel, currentMonth } from '../utils/format.js'
+import { formatCurrency, formatDate, monthLabel, currentMonth, compareStringDesc } from '../utils/format.js'
 
 export default function Expenses() {
   const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory, deleteCategory } = useData()
@@ -65,7 +65,7 @@ export default function Expenses() {
       if (filter.category !== 'all' && e.category !== filter.category) return false
       if (filter.month !== 'all' && !e.date?.startsWith(filter.month)) return false
       return true
-    }).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    }).sort((a, b) => compareStringDesc(a.date, b.date))
   }, [generalExpenses, filter])
 
   const stats = useMemo(() => {

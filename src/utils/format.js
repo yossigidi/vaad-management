@@ -1,3 +1,29 @@
+// Safely compare values that may be Firestore Timestamps, strings, or null
+// Used in sort callbacks to handle both imported (raw timestamp) and live (Date) data
+export const compareTimestamps = (a, b) => {
+  return getTimestampMs(b) - getTimestampMs(a) // descending
+}
+
+export const getTimestampMs = (val) => {
+  if (!val) return 0
+  if (typeof val === 'string') {
+    const d = new Date(val)
+    return isNaN(d) ? 0 : d.getTime()
+  }
+  if (typeof val === 'number') return val
+  if (val.toMillis) return val.toMillis()
+  if (val.seconds !== undefined) return val.seconds * 1000 + (val.nanoseconds || 0) / 1e6
+  if (val instanceof Date) return val.getTime()
+  return 0
+}
+
+// Safe string compare (descending) for date strings - handles non-strings gracefully
+export const compareStringDesc = (a, b) => {
+  const sa = typeof a === 'string' ? a : (a?.toDate?.()?.toISOString?.() || '')
+  const sb = typeof b === 'string' ? b : (b?.toDate?.()?.toISOString?.() || '')
+  return sb.localeCompare(sa)
+}
+
 export const formatCurrency = (n) => {
   const num = Number(n) || 0
   return new Intl.NumberFormat('he-IL', {

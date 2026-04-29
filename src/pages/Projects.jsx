@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, Trash2, Hammer, Check, AlertCircle, ChevronRight, X, MessageCircle, Receipt, Edit2 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, formatDate } from '../utils/format.js'
+import { formatCurrency, formatDate, compareTimestamps, compareStringDesc } from '../utils/format.js'
 import PaymentMethodDialog from '../components/PaymentMethodDialog.jsx'
 import { getMethodInfo } from '../utils/paymentMethods.js'
 
@@ -60,7 +60,7 @@ export default function Projects() {
   }
 
   const sortedProjects = useMemo(
-    () => [...projects].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    () => [...projects].sort((a, b) => compareTimestamps(a.createdAt, b.createdAt)),
     [projects]
   )
 
@@ -490,7 +490,7 @@ function ProjectDetail({
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {projectExpenses.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(expense => (
+                {projectExpenses.sort((a, b) => compareStringDesc(a.date, b.date)).map(expense => (
                   <div key={expense.id} className="p-4 flex items-center gap-4 hover:bg-slate-50">
                     <div className="bg-amber-50 text-amber-600 p-2 rounded-lg">
                       <Receipt size={18} />

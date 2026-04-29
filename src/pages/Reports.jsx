@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileSpreadsheet, FileText, Download, Printer } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, formatDate, monthLabel, monthsFromStart, currentMonth } from '../utils/format.js'
+import { formatCurrency, formatDate, monthLabel, monthsFromStart, currentMonth, compareStringDesc } from '../utils/format.js'
 
 export default function Reports() {
   const { building, tenants, payments, expenses, projects, projectPayments } = useData()
@@ -104,7 +104,7 @@ export default function Reports() {
   const paidCount = monthPayments.filter(x => x.paid).length
   const monthExpenses = expenses
     .filter(e => !e.projectId && e.date?.startsWith(reportMonth))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .sort((a, b) => compareStringDesc(a.date, b.date))
   const monthExpensesTotal = monthExpenses.reduce((s, e) => s + Number(e.amount || 0), 0)
   const monthIncome = paidCount * building.monthlyFee
 

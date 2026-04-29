@@ -4,7 +4,7 @@ import {
   TrendingUp, TrendingDown, FileText, X, Trash2, Search, AlertCircle, Calendar
 } from 'lucide-react'
 import { useData } from '../context/DataContext.jsx'
-import { formatCurrency, formatDate } from '../utils/format.js'
+import { formatCurrency, formatDate, compareStringDesc } from '../utils/format.js'
 import { parseBankCSV, autoMatchTransaction } from '../utils/bankParser.js'
 
 export default function Treasury() {
@@ -41,7 +41,7 @@ export default function Treasury() {
 
   // ===== Latest manual balance =====
   const latestManual = useMemo(() => {
-    const sorted = [...balanceUpdates].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    const sorted = [...balanceUpdates].sort((a, b) => compareStringDesc(a.date, b.date))
     return sorted[0] || null
   }, [balanceUpdates])
 
@@ -439,7 +439,7 @@ function BalanceUpdateForm({ calculatedBalance, onClose, onSave }) {
 }
 
 function BalanceHistory({ balanceUpdates, calculatedBalance, onAdd, onDelete }) {
-  const sorted = [...balanceUpdates].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  const sorted = [...balanceUpdates].sort((a, b) => compareStringDesc(a.date, b.date))
 
   return (
     <div className="space-y-4">
@@ -499,7 +499,7 @@ function ReconcileView({
   const [showPaste, setShowPaste] = useState(false)
 
   const sorted = useMemo(() =>
-    [...bankTransactions].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    [...bankTransactions].sort((a, b) => compareStringDesc(a.date, b.date))
   , [bankTransactions])
 
   const filtered = useMemo(() => {

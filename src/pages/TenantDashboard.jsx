@@ -7,7 +7,7 @@ import { useData } from '../context/DataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   formatCurrency, monthLabel, monthsFromStart, currentMonth, formatDate,
-  generatePeriods, periodLabel, FREQUENCY_PERIODS_PER_YEAR
+  generatePeriods, periodLabel, FREQUENCY_PERIODS_PER_YEAR, compareStringDesc
 } from '../utils/format.js'
 
 export default function TenantDashboard({ onChangePassword }) {
@@ -209,7 +209,7 @@ export default function TenantDashboard({ onChangePassword }) {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {expenses.filter(e => !e.projectId).sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(e => (
+                {expenses.filter(e => !e.projectId).sort((a, b) => compareStringDesc(a.date, b.date)).map(e => (
                   <div key={e.id} className="p-4 flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${e.type === 'fixed' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
                       <Receipt size={16} />
