@@ -2,7 +2,7 @@ import { useState, lazy, Suspense } from 'react'
 import {
   LayoutDashboard, Users, Wallet, Receipt, Hammer, FileText,
   Settings as SettingsIcon, Building2, Menu, X, MessageSquare, LogOut, Lock,
-  TrendingUp, Banknote
+  TrendingUp, Banknote, Sparkles
 } from 'lucide-react'
 import { useAuth } from './context/AuthContext.jsx'
 import { useData } from './context/DataContext.jsx'
@@ -23,6 +23,7 @@ const Settings = lazy(() => import('./pages/Settings.jsx'))
 const Communications = lazy(() => import('./pages/Communications.jsx'))
 const AdditionalIncome = lazy(() => import('./pages/AdditionalIncome.jsx'))
 const Treasury = lazy(() => import('./pages/Treasury.jsx'))
+const ImportData = lazy(() => import('./pages/ImportData.jsx'))
 const TenantDashboard = lazy(() => import('./pages/TenantDashboard.jsx'))
 
 const ADMIN_PAGES = [
@@ -35,6 +36,7 @@ const ADMIN_PAGES = [
   { id: 'projects', label: 'פרויקטים', icon: Hammer, component: Projects },
   { id: 'communications', label: 'תקשורת', icon: MessageSquare, component: Communications },
   { id: 'reports', label: 'דוחות', icon: FileText, component: Reports },
+  { id: 'import', label: 'ייבוא מאקסל', icon: Sparkles, component: ImportData },
   { id: 'settings', label: 'הגדרות', icon: SettingsIcon, component: Settings }
 ]
 
